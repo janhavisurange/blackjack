@@ -11,11 +11,16 @@ const BLACKJACK_ASCII = `
 `;
 
 const BlackjackGame = () => {
-  const [gameState, setGameState] = useState('initial'); // initial, playing, gameOver
+  const [gameState, setGameState] = useState('initial'); // initial, betting, playing, gameOver
   const [dealerCards, setDealerCards] = useState([]);
   const [playerCards, setPlayerCards] = useState([]);
   const [message, setMessage] = useState('');
   const [showDealerCard, setShowDealerCard] = useState(false);
+  
+  // NEW: Betting system state
+  const [chips, setChips] = useState(1000);
+  const [currentBet, setCurrentBet] = useState(0);
+  const [betAmount, setBetAmount] = useState(10);
 
   // Cards array matching your Python logic
   const cards = [11, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10];
@@ -46,6 +51,30 @@ const BlackjackGame = () => {
     return newHand;
   };
 
+  const startBetting = () => {
+    if (chips <= 0) {
+      setMessage("💸 You're out of chips! Click 'Reset Game' to start over.");
+      return;
+    }
+    setGameState('betting');
+    setMessage('');
+  };
+
+  const placeBet = () => {
+    if (betAmount > chips) {
+      setMessage(`You only have $${chips} in chips!`);
+      return;
+    }
+    if (betAmount <= 0) {
+      setMessage('Please enter a valid bet amount!');
+      return;
+    }
+    
+    setCurrentBet(betAmount);
+    setChips(chips - betAmount);
+    startNewGame();
+  };
+
   const startNewGame = () => {
     // Deal initial cards
     const dealerHand = [getRandomCard(), getRandomCard()];
@@ -63,7 +92,9 @@ const BlackjackGame = () => {
     if (calculateTotal(adjustedPlayerHand) === 21) {
       setGameState('gameOver');
       setShowDealerCard(true);
-      setMessage('🎉 BLACKJACK! You win!!');
+      const winnings = Math.floor(currentBet * 2.5); // Blackjack pays 3:2
+      setChips(chips + currentBet + winnings);
+      setMessage(`🎉 BLACKJACK! You win $${winnings}!`);
     } else {
       setGameState('playing');
     }
@@ -83,9 +114,10 @@ const BlackjackGame = () => {
       const dealerTotal = calculateTotal(dealerCards);
       
       if (total === dealerTotal) {
-        setMessage(`💥 Oops! Your sum went overboard. Total: ${total}\nDealer also has total ${dealerTotal}. It's a tie.`);
+        setChips(chips + currentBet); // Return bet on tie
+        setMessage(`💥 Oops! Your sum went overboard. Total: ${total}\nDealer also has total ${dealerTotal}. It's a tie. Bet returned.`);
       } else {
-        setMessage(`💥 Oops! Your sum went overboard. Total: ${total}\nDealer had ${dealerTotal}. You lost.`);
+        setMessage(`💥 Oops! Your sum went overboard. Total: ${total}\nDealer had ${dealerTotal}. You lost $${currentBet}.`);
       }
       setGameState('gameOver');
     }
@@ -108,22 +140,37 @@ const BlackjackGame = () => {
     const dealerTotal = calculateTotal(currentDealerCards);
     const playerTotal = calculateTotal(playerCards);
     
-    // Compare hands
+    // Compare hands and calculate winnings
     let resultMessage = '';
+    let winnings = 0;
+    
     if (dealerTotal > 21 && playerTotal <= 21) {
-      resultMessage = `Dealer total: ${dealerTotal}\nPlayer total: ${playerTotal}\n\n🎉 Dealer busted. You win!`;
+      winnings = currentBet * 2;
+      setChips(chips + currentBet + winnings);
+      resultMessage = `Dealer total: ${dealerTotal}\nPlayer total: ${playerTotal}\n\n🎉 Dealer busted. You win $${winnings}!`;
     } else if (dealerTotal <= 21 && playerTotal > 21) {
-      resultMessage = `Dealer total: ${dealerTotal}\nPlayer total: ${playerTotal}\n\n😞 It's a bust. You lost.`;
+      resultMessage = `Dealer total: ${dealerTotal}\nPlayer total: ${playerTotal}\n\n😞 It's a bust. You lost $${currentBet}.`;
     } else if (dealerTotal === playerTotal) {
-      resultMessage = `Dealer total: ${dealerTotal}\nPlayer total: ${playerTotal}\n\n🤝 It's a tie.`;
+      setChips(chips + currentBet); // Return bet
+      resultMessage = `Dealer total: ${dealerTotal}\nPlayer total: ${playerTotal}\n\n🤝 It's a tie. Bet returned.`;
     } else if (dealerTotal > playerTotal) {
-      resultMessage = `Dealer total: ${dealerTotal}\nPlayer total: ${playerTotal}\n\n😞 Dealer won. You lost.`;
+      resultMessage = `Dealer total: ${dealerTotal}\nPlayer total: ${playerTotal}\n\n😞 Dealer won. You lost $${currentBet}.`;
     } else {
-      resultMessage = `Dealer total: ${dealerTotal}\nPlayer total: ${playerTotal}\n\n🎉 Dealer lost. You win!`;
+      winnings = currentBet * 2;
+      setChips(chips + currentBet + winnings);
+      resultMessage = `Dealer total: ${dealerTotal}\nPlayer total: ${playerTotal}\n\n🎉 Dealer lost. You win $${winnings}!`;
     }
     
     setMessage(resultMessage);
     setGameState('gameOver');
+  };
+
+  const resetGame = () => {
+    setChips(1000);
+    setCurrentBet(0);
+    setBetAmount(10);
+    setGameState('initial');
+    setMessage('');
   };
 
   const renderCards = (hand, hideFirst = false) => {
@@ -142,14 +189,60 @@ const BlackjackGame = () => {
       
       <h1 className="welcome">WELCOME TO BLACKJACK</h1>
 
+      {/* Chip Display - Always visible */}
+      <div className="chip-display">
+        <div className="chip-stack">
+          <span className="chip-icon">🎰</span>
+          <span className="chip-amount">${chips}</span>
+        </div>
+        {currentBet > 0 && gameState !== 'initial' && gameState !== 'betting' && (
+          <div className="current-bet">
+            Current Bet: ${currentBet}
+          </div>
+        )}
+      </div>
+
+      {/* Initial Screen */}
       {gameState === 'initial' && (
         <div className="initial-screen">
-          <button onClick={startNewGame} className="deal-button">
+          <button onClick={startBetting} className="deal-button">
             START GAME
           </button>
         </div>
       )}
 
+      {/* Betting Screen */}
+      {gameState === 'betting' && (
+        <div className="betting-screen">
+          <h2>Place Your Bet</h2>
+          <div className="bet-controls">
+            <div className="bet-input-group">
+              <label>Bet Amount:</label>
+              <input
+                type="number"
+                min="1"
+                max={chips}
+                value={betAmount}
+                onChange={(e) => setBetAmount(Number(e.target.value))}
+                className="bet-input"
+              />
+            </div>
+            <div className="quick-bet-buttons">
+              <button onClick={() => setBetAmount(10)} className="quick-bet">$10</button>
+              <button onClick={() => setBetAmount(25)} className="quick-bet">$25</button>
+              <button onClick={() => setBetAmount(50)} className="quick-bet">$50</button>
+              <button onClick={() => setBetAmount(100)} className="quick-bet">$100</button>
+              <button onClick={() => setBetAmount(chips)} className="quick-bet">ALL IN</button>
+            </div>
+          </div>
+          {message && <div className="bet-message">{message}</div>}
+          <button onClick={placeBet} className="deal-button place-bet-button">
+            PLACE BET
+          </button>
+        </div>
+      )}
+
+      {/* Game Table */}
       {(gameState === 'playing' || gameState === 'gameOver') && (
         <>
           <div className="table">
@@ -193,9 +286,14 @@ const BlackjackGame = () => {
             )}
             
             {gameState === 'gameOver' && (
-              <button onClick={startNewGame} className="deal-button">
-                PLAY ANOTHER ROUND
-              </button>
+              <>
+                <button onClick={startBetting} className="deal-button">
+                  PLAY ANOTHER ROUND
+                </button>
+                <button onClick={resetGame} className="reset-button">
+                  RESET GAME
+                </button>
+              </>
             )}
           </div>
         </>
@@ -251,8 +349,133 @@ const BlackjackGame = () => {
           font-size: 2.5rem;
           color: #ffd700;
           text-shadow: 0 0 20px rgba(255, 215, 0, 0.8), 0 4px 10px rgba(0, 0, 0, 0.5);
-          margin-bottom: 40px;
+          margin-bottom: 30px;
           letter-spacing: 3px;
+        }
+
+        /* NEW: Chip Display Styles */
+        .chip-display {
+          background: rgba(0, 0, 0, 0.6);
+          border: 3px solid #ffd700;
+          border-radius: 15px;
+          padding: 20px 40px;
+          margin-bottom: 30px;
+          display: flex;
+          gap: 30px;
+          align-items: center;
+          box-shadow: 0 5px 20px rgba(255, 215, 0, 0.3);
+        }
+
+        .chip-stack {
+          display: flex;
+          align-items: center;
+          gap: 15px;
+        }
+
+        .chip-icon {
+          font-size: 2.5rem;
+        }
+
+        .chip-amount {
+          font-family: 'Permanent Marker', cursive;
+          font-size: 2rem;
+          color: #ffd700;
+          text-shadow: 0 2px 10px rgba(255, 215, 0, 0.5);
+        }
+
+        .current-bet {
+          font-family: 'Permanent Marker', cursive;
+          font-size: 1.3rem;
+          color: #4caf50;
+          padding: 10px 20px;
+          background: rgba(76, 175, 80, 0.2);
+          border-radius: 10px;
+          border: 2px solid #4caf50;
+        }
+
+        /* NEW: Betting Screen Styles */
+        .betting-screen {
+          background: rgba(0, 0, 0, 0.6);
+          border: 3px solid #ffd700;
+          border-radius: 20px;
+          padding: 40px;
+          margin: 20px 0;
+          box-shadow: 0 10px 40px rgba(255, 215, 0, 0.3);
+          text-align: center;
+          max-width: 600px;
+        }
+
+        .betting-screen h2 {
+          font-family: 'Permanent Marker', cursive;
+          font-size: 2rem;
+          color: #ffd700;
+          margin-bottom: 30px;
+        }
+
+        .bet-controls {
+          margin-bottom: 30px;
+        }
+
+        .bet-input-group {
+          margin-bottom: 20px;
+        }
+
+        .bet-input-group label {
+          display: block;
+          font-size: 1.2rem;
+          color: #ffd700;
+          margin-bottom: 10px;
+        }
+
+        .bet-input {
+          font-family: 'Courier Prime', monospace;
+          font-size: 1.5rem;
+          padding: 15px;
+          width: 200px;
+          border: 3px solid #ffd700;
+          border-radius: 10px;
+          background: rgba(255, 255, 255, 0.1);
+          color: #fff;
+          text-align: center;
+        }
+
+        .bet-input:focus {
+          outline: none;
+          box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+        }
+
+        .quick-bet-buttons {
+          display: flex;
+          gap: 10px;
+          justify-content: center;
+          flex-wrap: wrap;
+        }
+
+        .quick-bet {
+          font-family: 'Permanent Marker', cursive;
+          font-size: 1rem;
+          padding: 12px 20px;
+          background: rgba(255, 215, 0, 0.2);
+          border: 2px solid #ffd700;
+          border-radius: 8px;
+          color: #ffd700;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+
+        .quick-bet:hover {
+          background: rgba(255, 215, 0, 0.4);
+          transform: scale(1.05);
+        }
+
+        .bet-message {
+          color: #ff6b6b;
+          font-size: 1.1rem;
+          margin: 15px 0;
+        }
+
+        .place-bet-button {
+          margin-top: 20px;
         }
 
         .initial-screen {
@@ -433,6 +656,18 @@ const BlackjackGame = () => {
           box-shadow: 0 10px 30px rgba(244, 67, 54, 0.5);
         }
 
+        .reset-button {
+          background: linear-gradient(135deg, #9e9e9e 0%, #757575 100%);
+          color: white;
+          font-size: 1.2rem;
+          padding: 15px 35px;
+        }
+
+        .reset-button:hover {
+          transform: translateY(-5px) scale(1.05);
+          box-shadow: 0 10px 30px rgba(158, 158, 158, 0.5);
+        }
+
         button:active {
           transform: translateY(-2px) scale(1.02);
         }
@@ -444,6 +679,15 @@ const BlackjackGame = () => {
 
           .welcome {
             font-size: 1.8rem;
+          }
+
+          .chip-display {
+            flex-direction: column;
+            gap: 15px;
+          }
+
+          .chip-amount {
+            font-size: 1.5rem;
           }
 
           .table {
@@ -465,6 +709,19 @@ const BlackjackGame = () => {
           .deal-button {
             font-size: 1.4rem;
             padding: 20px 40px;
+          }
+
+          .betting-screen {
+            padding: 30px 20px;
+          }
+
+          .quick-bet-buttons {
+            gap: 5px;
+          }
+
+          .quick-bet {
+            font-size: 0.9rem;
+            padding: 10px 15px;
           }
         }
       `}</style>
